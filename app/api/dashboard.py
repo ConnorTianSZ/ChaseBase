@@ -229,3 +229,39 @@ def time_node_stats(project_id: str = FPath(...)):
         return result
     finally:
         conn.close()
+
+
+@router.get("/time_node_drilldown")
+def time_node_drilldown(
+    project_id: str = FPath(...),
+    group_by: str = "buyer_name",
+):
+    """返回每个时间节点按采购员或供应商的到期物料分组统计"""
+    allowed = {"buyer_name", "supplier"}
+    if group_by not in allowed:
+        group_by = "buyer_name"
+
+    conn = get_connection(project_id)
+    try:
+        nodes = conn.execute(
+            "SELECT * FROM time_nodes ORDER BY sort_order ASC, node_date ASC"
+        ).fetchall()
+
+        result = []
+        for node in nodes:
+            n = dict(node)
+            rows = conn.execute(
+                f"""SELECT {group_by} as name, COUNT(*) as due_count
+                    FROM materials
+                    WHERE status='open' AND current_eta IS NOT NULL AND current_eta <= ?
+                    GROUP BY {group_by}
+                    ORDER BY due_count DESC
+                    LIMIT 20""",
+                (n["node_date"],),
+            ).fetchall()
+            n["groups"] = [dict(r) for r in rows]
+            result.append(n)
+
+        return result
+    finally:
+        conn.close()

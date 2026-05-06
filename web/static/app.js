@@ -290,144 +290,168 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 
-  // ── Dashboard ────────────────────────────────────────────────────
-  Alpine.data('dashboard', (projectId) => ({
-    pid: projectId,
-    overview: {}, byStatus: [], overdueSuppliers: [], chaseStats: [],
-    loading: false, _charts: {},
+  	// ── Dashboard ────────────────────────────────────────────────────
+	Alpine.data('dashboard', (projectId) => ({
+	    pid: projectId,
+	    overview: {}, byStatus: [], overdueSuppliers: [], chaseStats: [],
+	    loading: false, _charts: {},
 
-    // 时间节点
-    timeNodes: [],
-    timeNodeStats: [],
-    showAddTimeNode: false,
-    newTimeNode: { label: '', node_date: '', color: '#2563eb', sort_order: 0 },
+	    // 时间节点
+	    timeNodes: [],
+	    timeNodeStats: [],
+	    showAddTimeNode: false,
+	    newTimeNode: { label: '', node_date: '', color: '#2563eb', sort_order: 0 },
+	    colorPresets: ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7e22ce', '#0d9488', '#ca8a04', '#0891b2'],
 
-    purl(p) { return `/api/projects/${this.pid}${p}`; },
+	    // 钻取视图
+	    tnView: 'overview',
+	    drilldownData: [],
+	    drilldownGroups: [],
 
-    async init() {
-      this.loading = true;
-      try {
-        [this.overview, this.byStatus, this.overdueSuppliers, this.chaseStats] = await Promise.all([
-          api('GET', this.purl('/dashboard/overview')),
-          api('GET', this.purl('/dashboard/aggregates?group_by=status')),
-          api('GET', this.purl('/dashboard/overdue_by_supplier')),
-          api('GET', this.purl('/dashboard/chase_stats')),
-        ]);
-        this.$nextTick(() => this.renderCharts());
-      } catch (e) { toast(e.message, 'error'); }
-      finally { this.loading = false; }
-      await this.loadTimeNodes();
-    },
+	    purl(p) { return `/api/projects/${this.pid}${p}`; },
 
-    async loadTimeNodes() {
-      try {
-        [this.timeNodes, this.timeNodeStats] = await Promise.all([
-          api('GET', this.purl('/dashboard/time_nodes')),
-          api('GET', this.purl('/dashboard/time_node_stats')),
-        ]);
-        this.$nextTick(() => this.renderTimeNodeChart());
-      } catch (e) { toast(e.message, 'error'); }
-    },
+	    async init() {
+	      this.loading = true;
+	      try {
+	        [this.overview, this.byStatus, this.overdueSuppliers, this.chaseStats] = await Promise.all([
+	          api('GET', this.purl('/dashboard/overview')),
+	          api('GET', this.purl('/dashboard/aggregates?group_by=status')),
+	          api('GET', this.purl('/dashboard/overdue_by_supplier')),
+	          api('GET', this.purl('/dashboard/chase_stats')),
+	        ]);
+	        this.$nextTick(() => this.renderCharts());
+	      } catch (e) { toast(e.message, 'error'); }
+	      finally { this.loading = false; }
+	      await this.loadTimeNodes();
+	    },
 
-    async createTimeNode() {
-      if (!this.newTimeNode.label || !this.newTimeNode.node_date) return;
-      try {
-        await api('POST', this.purl('/dashboard/time_nodes'), { ...this.newTimeNode });
-        toast('时间节点已添加', 'success');
-        this.newTimeNode = { label: '', node_date: '', color: '#2563eb', sort_order: 0 };
-        this.showAddTimeNode = false;
-        await this.loadTimeNodes();
-      } catch (e) { toast(e.message, 'error'); }
-    },
+	    async loadTimeNodes() {
+	      try {
+	        [this.timeNodes, this.timeNodeStats] = await Promise.all([
+	          api('GET', this.purl('/dashboard/time_nodes')),
+	          api('GET', this.purl('/dashboard/time_node_stats')),
+	        ]);
+	        this.$nextTick(() => this.renderTimeNodeChart());
+	      } catch (e) { toast(e.message, 'error'); }
+	    },
 
-    async editTimeNode(node) {
-      const newLabel = prompt('节点名称：', node.label);
-      if (newLabel === null) return;
-      const newDate = prompt('日期（YYYY-MM-DD）：', node.node_date);
-      if (newDate === null) return;
-      try {
-        await api('PUT', this.purl(`/dashboard/time_nodes/${node.id}`), { label: newLabel, node_date: newDate });
-        toast('已更新', 'success');
-        await this.loadTimeNodes();
-      } catch (e) { toast(e.message, 'error'); }
-    },
+	    async loadDrilldown(groupBy) {
+	      try {
+	        const data = await api('GET', this.purl(`/dashboard/time_node_drilldown?group_by=${groupBy}`));
+	        this.drilldownData = data;
+	        const nameSet = new Set();
+	        data.forEach(n => (n.groups || []).forEach(g => nameSet.add(g.name)));
+	        const totals = {};
+	        data.forEach(n => (n.groups || []).forEach(g => { totals[g.name] = (totals[g.name]||0) + g.due_count; }));
+	        this.drilldownGroups = [...nameSet].sort((a,b) => (totals[b]||0) - (totals[a]||0)).slice(0,15);
+	        data.forEach(n => {
+	          n.groupMap = {};
+	          (n.groups || []).forEach(g => { n.groupMap[g.name] = g.due_count; });
+	        });
+	        this.$nextTick(() => this.renderDrilldownChart(groupBy));
+	      } catch (e) { toast(e.message, 'error'); }
+	    },
 
-    async deleteTimeNode(id) {
-      if (!confirm('确定删除此时间节点？')) return;
-      try {
-        await api('DELETE', this.purl(`/dashboard/time_nodes/${id}`));
-        toast('已删除', 'success');
-        await this.loadTimeNodes();
-      } catch (e) { toast(e.message, 'error'); }
-    },
+	    async createTimeNode() {
+	      if (!this.newTimeNode.label || !this.newTimeNode.node_date) return;
+	      try {
+	        await api('POST', this.purl('/dashboard/time_nodes'), { ...this.newTimeNode });
+	        toast('时间节点已添加', 'success');
+	        this.newTimeNode = { label: '', node_date: '', color: '#2563eb', sort_order: 0 };
+	        this.showAddTimeNode = false;
+	        await this.loadTimeNodes();
+	      } catch (e) { toast(e.message, 'error'); }
+	    },
 
-    renderTimeNodeChart() {
-      const ctx = document.getElementById('chart-time-nodes');
-      if (!ctx || !this.timeNodeStats.length) return;
-      if (this._charts.timeNodes) this._charts.timeNodes.destroy();
+	    async editTimeNode(node) {
+	      const newLabel = prompt('节点名称：', node.label);
+	      if (newLabel === null) return;
+	      const newDate = prompt('日期（YYYY-MM-DD）：', node.node_date);
+	      if (newDate === null) return;
+	      try {
+	        await api('PUT', this.purl(`/dashboard/time_nodes/${node.id}`), { label: newLabel, node_date: newDate });
+	        toast('已更新', 'success');
+	        await this.loadTimeNodes();
+	      } catch (e) { toast(e.message, 'error'); }
+	    },
 
-      const colors = this.timeNodeStats.map(n => {
-        const matched = this.timeNodes.find(t => t.id === n.id);
-        return matched?.color || '#2563eb';
-      });
+	    async deleteTimeNode(id) {
+	      if (!confirm('确定删除此时间节点？')) return;
+	      try {
+	        await api('DELETE', this.purl(`/dashboard/time_nodes/${id}`));
+	        toast('已删除', 'success');
+	        await this.loadTimeNodes();
+	      } catch (e) { toast(e.message, 'error'); }
+	    },
 
-      this._charts.timeNodes = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: this.timeNodeStats.map(n => n.label),
-          datasets: [
-            {
-              label: '到期物料',
-              data: this.timeNodeStats.map(n => n.due_count),
-              backgroundColor: colors,
-            },
-            {
-              label: '已逾期',
-              data: this.timeNodeStats.map(n => n.overdue_count),
-              backgroundColor: '#dc2626',
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { position: 'bottom' } },
-          scales: {
-            x: { grid: { display: false } },
-            y: { beginAtZero: true, ticks: { stepSize: 1 } },
-          },
-        },
-      });
-    },
+	    renderTimeNodeChart() {
+	      const ctx = document.getElementById('chart-time-nodes');
+	      if (!ctx || !this.timeNodeStats.length) return;
+	      if (this._charts.timeNodes) this._charts.timeNodes.destroy();
 
-    renderCharts() {
-      const statusCtx = document.getElementById('chart-status');
-      if (statusCtx && this.byStatus.length) {
-        if (this._charts.status) this._charts.status.destroy();
-        this._charts.status = new Chart(statusCtx, {
-          type: 'doughnut',
-          data: {
-            labels: this.byStatus.map(r => r.group_key || '未知'),
-            datasets: [{ data: this.byStatus.map(r => r.total), backgroundColor: ['#2563eb','#16a34a','#d97706','#6b7280','#dc2626'] }],
-          },
-          options: { plugins: { legend: { position: 'bottom' } }, cutout: '60%' },
-        });
-      }
-      const overdueCtx = document.getElementById('chart-overdue');
-      if (overdueCtx && this.overdueSuppliers.length) {
-        if (this._charts.overdue) this._charts.overdue.destroy();
-        this._charts.overdue = new Chart(overdueCtx, {
-          type: 'bar',
-          data: {
-            labels: this.overdueSuppliers.slice(0,10).map(r => r.supplier || '未知'),
-            datasets: [{ label:'逾期数量', data: this.overdueSuppliers.slice(0,10).map(r => r.overdue_count), backgroundColor:'#dc2626' }],
-          },
-          options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } }, indexAxis: 'y' },
-        });
-      }
-    },
-  }));
+	      const colors = this.timeNodeStats.map(n => {
+	        const matched = this.timeNodes.find(t => t.id === n.id);
+	        return matched?.color || '#2563eb';
+	      });
 
-  // ── Chat ─────────────────────────────────────────────────────────
+	      this._charts.timeNodes = new Chart(ctx, {
+	        type: 'bar',
+	        data: {
+	          labels: this.timeNodeStats.map(n => n.label),
+	          datasets: [
+	            {
+	              label: '到期物料',
+	              data: this.timeNodeStats.map(n => n.due_count),
+	              backgroundColor: colors,
+	            },
+	            {
+	              label: '已逾期',
+	              data: this.timeNodeStats.map(n => n.overdue_count),
+	              backgroundColor: '#dc2626',
+	            },
+	          ],
+	        },
+	        options: {
+	          responsive: true,
+	          plugins: { legend: { position: 'bottom' } },
+	          scales: {
+	            x: { grid: { display: false } },
+	            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+	          },
+	        },
+	      });
+	    },
+
+	    renderDrilldownChart(groupBy) {
+	      const chartId = groupBy === 'supplier' ? 'chart-drilldown-supplier' : 'chart-drilldown';
+	      const ctx = document.getElementById(chartId);
+	      if (!ctx || !this.drilldownData.length) return;
+	      const chartKey = groupBy === 'supplier' ? 'drilldownSupplier' : 'drilldown';
+	      if (this._charts[chartKey]) this._charts[chartKey].destroy();
+
+	      const labels = this.drilldownData.map(n => n.label);
+	      const colors = this.colorPresets;
+	      const datasets = this.drilldownGroups.map((name, i) => ({
+	        label: name,
+	        data: this.drilldownData.map(n => n.groupMap[name] || 0),
+	        backgroundColor: colors[i % colors.length],
+	      }));
+	      this._charts[chartKey] = new Chart(ctx, {
+	        type: 'bar',
+	        data: { labels, datasets },
+	        options: {
+	          responsive: true,
+	          plugins: {
+	            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
+	          },
+	          scales: {
+	            x: { grid: { display: false } },
+	            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+	          },
+	        },
+	      });
+	    },
+  }));// ── Chat ─────────────────────────────────────────────────────────
   Alpine.data('chat', (projectId) => ({
     pid: projectId,
     messages: [], input: '', loading: false, history: [],

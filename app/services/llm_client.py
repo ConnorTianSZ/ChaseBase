@@ -38,10 +38,14 @@ def call_llm(
 
 def _call_anthropic(system: str, user: str, model: str, max_tokens: int) -> str:
     import anthropic
+    settings = get_settings()
     api_key = _resolve_key()
     if not api_key:
         raise RuntimeError("API key not configured. Set ANTHROPIC_API_KEY or API_KEY in Settings.")
-    client = anthropic.Anthropic(api_key=api_key)
+    kwargs = {"api_key": api_key}
+    if settings.api_base:
+        kwargs["base_url"] = settings.api_base
+    client = anthropic.Anthropic(**kwargs)
     message = client.messages.create(
         model=model or "claude-sonnet-4-20250514",
         max_tokens=max_tokens,

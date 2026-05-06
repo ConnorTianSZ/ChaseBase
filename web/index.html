@@ -125,7 +125,7 @@
 
     <!-- ════════ 物料表 ════════ -->
     <template x-if="$store.nav.page === 'materials' && activeProject>
-      <div x-data="materials(activeProject.id)" style="display:flex;flex-direction:column;height:100%;">
+      <div x-data="materials(activeProject.id)" style="display:flex;flex-direction:column;flex:1;min-height:0;">
 
         <div class="topbar">
           <span class="topbar-title">物料总览</span>
@@ -367,7 +367,7 @@
 
     <!-- ════════ 收件审批 ════════ -->
     <template x-if="$store.nav.page === 'inbox' && activeProject">
-      <div x-data="inbox(activeProject.id)" style="display:flex;flex-direction:column;height:100%;">
+      <div x-data="inbox(activeProject.id)" style="display:flex;flex-direction:column;flex:1;min-height:0;">
 
         <div class="topbar">
           <span class="topbar-title">收件审批</span>
@@ -480,7 +480,7 @@
 
     <!-- ════════ Dashboard ════════ -->
     <template x-if="$store.nav.page === 'dashboard' && activeProject">
-      <div x-data="dashboard(activeProject.id)" style="display:flex;flex-direction:column;height:100%;overflow-y:auto;">
+      <div x-data="dashboard(activeProject.id)" style="display:flex;flex-direction:column;flex:1;min-height:0;">
         <div class="topbar">
           <span class="topbar-title">Dashboard</span>
           <button class="btn btn-outline btn-sm" @click="init()">🔄 刷新</button>
@@ -521,7 +521,13 @@
                 </div>
                 <div>
                   <label class="field-label">颜色</label>
-                  <input type="color" x-model="newTimeNode.color" style="width:50px;height:34px;padding:2px;" />
+                  <div style="display:flex;gap:6px;margin-top:4px;">
+                    <template x-for="c in colorPresets" :key="c">
+                      <span style="display:inline-block;width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid;"
+                        :style="'background:'+c+';border-color:'+(newTimeNode.color===c?'#111':'transparent')"
+                        @click="newTimeNode.color=c"></span>
+                    </template>
+                  </div>
                 </div>
                 <div>
                   <label class="field-label">排序</label>
@@ -540,55 +546,139 @@
 
               <template x-if="timeNodes.length > 0">
                 <div>
-                  <!-- 统计图表 -->
-                  <div style="margin-bottom:16px;">
-                    <canvas id="chart-time-nodes" height="120"></canvas>
+                  <!-- Tab 切换 -->
+                  <div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid #e5e7eb;">
+                    <button style="padding:6px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;"
+                      :style="tnView==='overview' ? 'color:#2563eb;border-bottom:2px solid #2563eb;margin-bottom:-2px;' : 'color:#6b7280;'"
+                      @click="tnView='overview';$nextTick(()=>renderTimeNodeChart())">总览</button>
+                    <button style="padding:6px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;"
+                      :style="tnView==='by_buyer' ? 'color:#2563eb;border-bottom:2px solid #2563eb;margin-bottom:-2px;' : 'color:#6b7280;'"
+                      @click="tnView='by_buyer';loadDrilldown('buyer_name')">按采购员</button>
+                    <button style="padding:6px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;"
+                      :style="tnView==='by_supplier' ? 'color:#2563eb;border-bottom:2px solid #2563eb;margin-bottom:-2px;' : 'color:#6b7280;'"
+                      @click="tnView='by_supplier';loadDrilldown('supplier')">按供应商</button>
                   </div>
-                  <!-- 统计表格 -->
-                  <div class="table-wrap">
-                    <table style="font-size:13px;">
-                      <thead>
-                        <tr>
-                          <th>节点</th>
-                          <th>日期</th>
-                          <th>到期物料</th>
-                          <th>已逾期</th>
-                          <th>未确认交期</th>
-                          <th>占比</th>
-                          <th>Top 供应商</th>
-                          <th style="width:80px;">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <template x-for="(node, i) in timeNodeStats" :key="node.id">
-                          <tr>
-                            <td style="font-weight:600;">
-                              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;" :style="'background:'+(timeNodes.find(n=>n.id===node.id)?.color||'#2563eb')"></span>
-                              <span x-text="node.label"></span>
-                            </td>
-                            <td x-text="node.node_date"></td>
-                            <td style="font-weight:600;" x-text="node.due_count"></td>
-                            <td x-text="node.overdue_count" :style="node.overdue_count>0?'color:#dc2626;font-weight:600':''"></td>
-                            <td x-text="node.no_eta_count"></td>
-                            <td>
-                              <span x-text="node.total_open ? ((node.due_count/node.total_open*100).toFixed(1)+'%') : '—'"></span>
-                            </td>
-                            <td style="font-size:11px;max-width:200px;">
-                              <template x-for="(s,si) in node.by_supplier" :key="si">
-                                <span x-text="s.supplier+':'+s.cnt"></span>
-                                <span x-show="si < node.by_supplier.length-1">, </span>
+
+                  <!-- 总览视图 -->
+                  <template x-if="tnView === 'overview'">
+                    <div>
+                      <div style="margin-bottom:16px;">
+                        <canvas id="chart-time-nodes" height="120"></canvas>
+                      </div>
+                      <div class="table-wrap">
+                        <table style="font-size:13px;">
+                          <thead>
+                            <tr>
+                              <th>节点</th>
+                              <th>日期</th>
+                              <th>到期物料</th>
+                              <th>已逾期</th>
+                              <th>未确认交期</th>
+                              <th>占比</th>
+                              <th>Top 供应商</th>
+                              <th style="width:80px;">操作</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <template x-for="(node, i) in timeNodeStats" :key="node.id">
+                              <tr>
+                                <td style="font-weight:600;">
+                                  <span style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;" :style="'background:'+(timeNodes.find(n=>n.id===node.id)?.color||'#2563eb')"></span>
+                                  <span x-text="node.label"></span>
+                                </td>
+                                <td x-text="node.node_date"></td>
+                                <td style="font-weight:600;" x-text="node.due_count"></td>
+                                <td x-text="node.overdue_count" :style="node.overdue_count>0?'color:#dc2626;font-weight:600':''"></td>
+                                <td x-text="node.no_eta_count"></td>
+                                <td>
+                                  <span x-text="node.total_open ? ((node.due_count/node.total_open*100).toFixed(1)+'%') : '—'"></span>
+                                </td>
+                                <td style="font-size:11px;max-width:200px;">
+                                  <template x-for="(s,si) in node.by_supplier" :key="si">
+                                    <span x-text="s.supplier+':'+s.cnt"></span>
+                                    <span x-show="si < node.by_supplier.length-1">, </span>
+                                  </template>
+                                  <span x-show="!node.by_supplier.length">—</span>
+                                </td>
+                                <td>
+                                  <button class="btn btn-outline btn-sm" @click="editTimeNode(node)" style="font-size:11px;padding:2px 6px;">编辑</button>
+                                  <button class="btn btn-danger btn-sm" @click="deleteTimeNode(node.id)" style="font-size:11px;padding:2px 6px;">删除</button>
+                                </td>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </template>
+
+                  <!-- 按采购员视图 -->
+                  <template x-if="tnView === 'by_buyer'">
+                    <div>
+                      <div style="margin-bottom:16px;">
+                        <canvas id="chart-drilldown" height="200"></canvas>
+                      </div>
+                      <div class="table-wrap">
+                        <table style="font-size:13px;">
+                          <thead>
+                            <tr>
+                              <th>时间节点</th>
+                              <template x-for="g in drilldownGroups" :key="g">
+                                <th style="font-size:11px;" x-text="g"></th>
                               </template>
-                              <span x-show="!node.by_supplier.length">—</span>
-                            </td>
-                            <td>
-                              <button class="btn btn-outline btn-sm" @click="editTimeNode(node)" style="font-size:11px;padding:2px 6px;">编辑</button>
-                              <button class="btn btn-danger btn-sm" @click="deleteTimeNode(node.id)" style="font-size:11px;padding:2px 6px;">删除</button>
-                            </td>
-                          </tr>
-                        </template>
-                      </tbody>
-                    </table>
-                  </div>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <template x-for="node in drilldownData" :key="node.id">
+                              <tr>
+                                <td style="font-weight:600;white-space:nowrap;">
+                                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;" :style="'background:'+(timeNodes.find(n=>n.id===node.id)?.color||'#2563eb')"></span>
+                                  <span x-text="node.label"></span>
+                                </td>
+                                <template x-for="g in drilldownGroups" :key="g">
+                                  <td x-text="(node.groupMap[g]||0)" style="text-align:center;"></td>
+                                </template>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </template>
+
+                  <!-- 按供应商视图 -->
+                  <template x-if="tnView === 'by_supplier'">
+                    <div>
+                      <div style="margin-bottom:16px;">
+                        <canvas id="chart-drilldown-supplier" height="200"></canvas>
+                      </div>
+                      <div class="table-wrap" style="max-height:400px;overflow-y:auto;">
+                        <table style="font-size:12px;">
+                          <thead>
+                            <tr>
+                              <th>时间节点</th>
+                              <template x-for="g in drilldownGroups" :key="g">
+                                <th style="font-size:10px;max-width:80px;overflow:hidden;text-overflow:ellipsis;" x-text="g"></th>
+                              </template>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <template x-for="node in drilldownData" :key="node.id">
+                              <tr>
+                                <td style="font-weight:600;white-space:nowrap;">
+                                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;" :style="'background:'+(timeNodes.find(n=>n.id===node.id)?.color||'#2563eb')"></span>
+                                  <span x-text="node.label"></span>
+                                </td>
+                                <template x-for="g in drilldownGroups" :key="g">
+                                  <td x-text="(node.groupMap[g]||0)" style="text-align:center;"></td>
+                                </template>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </template>
             </div>
@@ -620,7 +710,7 @@
 
     <!-- ════════ Chat ════════ -->
     <template x-if="$store.nav.page === 'chat' && activeProject">
-      <div x-data="chat(activeProject.id)" style="display:flex;flex-direction:column;height:100%;">
+      <div x-data="chat(activeProject.id)" style="display:flex;flex-direction:column;flex:1;min-height:0;">
         <div class="topbar">
           <span class="topbar-title">Chat</span>
           <span style="font-size:12px;color:#888;">用自然语言查询物料、更新数据</span>
@@ -651,7 +741,7 @@
 
     <!-- ════════ 导入 Excel ════════ -->
     <template x-if="$store.nav.page === 'imports' && activeProject">
-      <div x-data="imports(activeProject.id)" style="display:flex;flex-direction:column;height:100%;overflow-y:auto;">
+      <div x-data="imports(activeProject.id)" style="display:flex;flex-direction:column;flex:1;min-height:0;">
         <div class="topbar"><span class="topbar-title">导入 Excel</span></div>
         <div class="content">
           <div class="card" style="margin-bottom:16px;">
@@ -724,7 +814,7 @@
 
     <!-- ════════ 设置 ════════ -->
     <template x-if="$store.nav.page === 'settings'">
-      <div x-data="settings" style="display:flex;flex-direction:column;height:100%;overflow-y:auto;">
+      <div x-data="settings" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;">
         <div class="topbar"><span class="topbar-title">系统设置</span></div>
         <div class="content">
 
