@@ -72,6 +72,15 @@ def _call_openai_compat(system: str, user: str, model: str, max_tokens: int) -> 
     if settings.api_base:
         kwargs["base_url"] = settings.api_base
 
+    # 公司网络代理支持：通过 httpx 显式传入
+    proxy = settings.https_proxy or settings.http_proxy
+    if proxy:
+        try:
+            import httpx
+            kwargs["http_client"] = httpx.Client(proxy=proxy)
+        except ImportError:
+            pass  # httpx 未安装时回退到环境变量方式
+
     client = OpenAI(**kwargs)
     resp = client.chat.completions.create(
         model=model or "gpt-4o",
