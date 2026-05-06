@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la .venv)",
+      "Bash(ls .env)",
+      "Read(//e/project Codex/cowork ChaseBase/**)",
+      "Bash(python -c ' *)",
+      "Bash(python -m pip install -r requirements.txt -q)",
+      "Bash(python -m uvicorn app.main:app --host 127.0.0.1 --port 8000)",
+      "Bash(curl -s http://127.0.0.1:8000/health)",
+      "Bash(curl -s http://127.0.0.1:8000/api/projects)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/projects -H \"Content-Type: application/json\" -d '{\"id\":\"M.6001515\",\"name\":\"1515 项目\",\"description\":\"测试项目\"}')",
+      "Bash(curl -s http://127.0.0.1:8000/api/projects/M.6001515/dashboard/overview)",
+      "Bash(curl -s http://127.0.0.1:8000/)",
+      "Bash(curl -s --noproxy \"*\" http://127.0.0.1:8000/api/projects)",
+      "Bash(curl -s --noproxy \"*\" -X POST http://127.0.0.1:8000/api/projects -H \"Content-Type: application/json\" -d \"{\\\\\"id\\\\\":\\\\\"M.6001515\\\\\",\\\\\"name\\\\\":\\\\\"1515 项目\\\\\",\\\\\"description\\\\\":\\\\\"测试项目\\\\\"}\")",
+      "Bash(curl -s --noproxy \"*\" http://127.0.0.1:8000/api/projects/M.6001515/dashboard/overview)",
+      "Bash(taskkill /F /IM python.exe)",
+      "Bash(curl -s http://localhost:5978/health)",
+      "Bash(curl -s http://localhost:5978/api/projects/M.6001515/dashboard/overview)",
+      "Bash(curl -s http://localhost:5978/api/projects/M.6001515/dashboard/time_nodes)",
+      "Bash(curl -s http://localhost:5978/api/projects/M.6001515/dashboard/time_node_stats)",
+      "Bash(curl -s -X POST http://localhost:5978/api/projects/M.6001515/dashboard/time_nodes -H \"Content-Type: application/json\" -d '{\"label\":\"第6周\",\"node_date\":\"2026-05-15\",\"color\":\"#2563eb\",\"sort_order\":1}')",
+      "Bash(netstat -ano)",
+      "Bash(curl -s -X POST http://localhost:5980/api/projects/test_proj2/dashboard/time_nodes -H \"Content-Type: application/json\" -d '{\"label\":\"第6周\",\"node_date\":\"2026-05-15\",\"color\":\"#2563eb\",\"sort_order\":1}')",
+      "Bash(curl -s http://localhost:5980/api/projects/test_proj2/dashboard/time_nodes)",
+      "Bash(curl -s http://localhost:5980/api/projects/test_proj2/dashboard/time_node_stats)",
+      "Bash(curl *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'overdue by supplier: {len\\(d\\)} suppliers'\\)\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'chase stats: {len\\(d\\)} buyers'\\)\")",
+      "Bash(dir /b /s /a:d \"E:\\\\project Codex\\\\cowork ChaseBase\\\\ChaseBase\")",
+      "Bash(gh auth *)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}
