@@ -325,6 +325,41 @@ document.addEventListener('alpine:init', () => {
 	      await this.loadTimeNodes();
 	    },
 
+	    renderCharts() {
+	      const statusCtx = document.getElementById('chart-status');
+	      if (statusCtx && this.byStatus.length) {
+	        if (this._charts.status) this._charts.status.destroy();
+	        this._charts.status = new Chart(statusCtx, {
+	          type: 'doughnut',
+	          data: {
+	            labels: this.byStatus.map(s => s.status || '未知'),
+	            datasets: [{
+	              data: this.byStatus.map(s => s.count || 0),
+	              backgroundColor: ['#2563eb', '#16a34a', '#6b7280', '#d97706', '#dc2626'],
+	            }],
+	          },
+	          options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+	        });
+	      }
+	      const overdueCtx = document.getElementById('chart-overdue');
+	      if (overdueCtx && this.overdueSuppliers.length) {
+	        if (this._charts.overdue) this._charts.overdue.destroy();
+	        const top10 = this.overdueSuppliers.slice(0, 10);
+	        this._charts.overdue = new Chart(overdueCtx, {
+	          type: 'bar',
+	          data: {
+	            labels: top10.map(s => s.supplier || '未知'),
+	            datasets: [{
+	              label: '逾期数量',
+	              data: top10.map(s => s.count || 0),
+	              backgroundColor: '#dc2626',
+	            }],
+	          },
+	          options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } },
+	        });
+	      }
+	    },
+
 	    async loadTimeNodes() {
 	      try {
 	        [this.timeNodes, this.timeNodeStats] = await Promise.all([
