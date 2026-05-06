@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     send_interval_seconds: int = 2
     timezone: str = "Asia/Shanghai"
 
+    # 代理
+    https_proxy: str = ""
+    http_proxy: str = ""
+
     # 服务
     host: str = "127.0.0.1"
     port: int = 8000
@@ -47,4 +51,10 @@ def get_settings() -> Settings:
     global _settings
     if _settings is None:
         _settings = Settings()
+        # 自动把代理注入环境变量，让 httpx / requests 等库都能读到
+        import os
+        if _settings.https_proxy:
+            os.environ.setdefault("HTTPS_PROXY", _settings.https_proxy)
+        if _settings.http_proxy:
+            os.environ.setdefault("HTTP_PROXY", _settings.http_proxy)
     return _settings
