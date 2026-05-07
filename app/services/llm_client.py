@@ -10,7 +10,7 @@ from app.config import get_settings
 def _resolve_key():
     """按优先级返回 API key: api_key > anthropic_api_key > env fallback"""
     s = get_settings()
-    return s.api_key or s.anthropic_api_key or ""
+    return (s.api_key or s.anthropic_api_key or "").strip()
 
 
 
@@ -26,7 +26,11 @@ def _normalize_base_url(base_url: str) -> str:
         parsed = urlparse(u)
     if not parsed.scheme or not parsed.netloc:
         raise RuntimeError(f"Invalid API_BASE: {base_url}")
-    return u.rstrip("/")
+    u = u.rstrip("/")
+    # OpenAI 兼容端点通常要求 /v1；未配置时自动补齐，降低误配概率
+    if parsed.path in ("", "/"):
+        u = u + "/v1"
+    return u
 
 def call_llm(
     system: str,
@@ -81,7 +85,7 @@ def _call_openai_compat(system: str, user: str, model: str, max_tokens: int) -> 
         )
     settings = get_settings()
     api_key = _resolve_key()
-    if not api_key:
+    if not api_key or api_key == "sk-":
         raise RuntimeError("API key not configured. Set API_KEY or ANTHROPIC_API_KEY in Settings.")
 
     kwargs = {"api_key": api_key}
@@ -93,7 +97,7 @@ def _call_openai_compat(system: str, user: str, model: str, max_tokens: int) -> 
     if proxy:
         try:
             import httpx
-            kwargs["http_client"] = httpx.Client(proxy=proxy)
+            kwargs["http_client"] = httpx.Client(proxy=proxy, timeout=60.0)
         except ImportError:
             pass  # httpx 未安装时回退到环境变量方式
 
@@ -109,6 +113,13 @@ def _call_openai_compat(system: str, user: str, model: str, max_tokens: int) -> 
         )
         return resp.choices[0].message.content or ""
     except Exception as e:
+        msg = str(e)
+        if "Connection error" in msg or "connect" in msg.lower():
+            raise RuntimeError(
+                "LLM request failed: Connection error. "
+                "Please verify API_BASE/API_KEY and corporate proxy reachability. "
+                f"Current API_BASE={settings.api_base or '(empty)'}, provider={settings.llm_provider}."
+            )
         raise RuntimeError(f"LLM request failed: {e}")
 
 
