@@ -3,6 +3,7 @@ LLM client wrapper — 支持 Anthropic / OpenAI / 自定义兼容端点
 """
 from __future__ import annotations
 import json
+from urllib.parse import urlparse
 from app.config import get_settings
 
 
@@ -11,6 +12,25 @@ def _resolve_key():
     s = get_settings()
     return s.api_key or s.anthropic_api_key or ""
 
+
+
+
+def _normalize_base_url(base_url: str, ensure_v1: bool = False) -> str:
+    u = (base_url or "").strip()
+    if not u:
+        return ""
+    parsed = urlparse(u)
+    # 常见误配: https://https://api.xxx.com
+    if not parsed.netloc and parsed.path.startswith("https://"):
+        u = parsed.path
+        parsed = urlparse(u)
+    if not parsed.scheme or not parsed.netloc:
+        raise RuntimeError(f"Invalid API_BASE: {base_url}")
+    normalized = u.rstrip("/")
+    parsed2 = urlparse(normalized)
+    if ensure_v1 and parsed2.path in ("", "/"):
+        normalized = normalized + "/v1"
+    return normalized
 
 def call_llm(
     system: str,
@@ -44,7 +64,7 @@ def _call_anthropic(system: str, user: str, model: str, max_tokens: int) -> str:
         raise RuntimeError("API key not configured. Set ANTHROPIC_API_KEY or API_KEY in Settings.")
     kwargs = {"api_key": api_key}
     if settings.api_base:
-        kwargs["base_url"] = settings.api_base
+        kwargs["base_url"] = _normalize_base_url(settings.api_base, ensure_v1=False)
     client = anthropic.Anthropic(**kwargs)
     message = client.messages.create(
         model=model or "claude-sonnet-4-20250514",
@@ -70,27 +90,35 @@ def _call_openai_compat(system: str, user: str, model: str, max_tokens: int) -> 
 
     kwargs = {"api_key": api_key}
     if settings.api_base:
-        kwargs["base_url"] = settings.api_base
+        kwargs["base_url"] = _normalize_base_url(settings.api_base, ensure_v1=True)
 
     # 公司网络代理支持：通过 httpx 显式传入
     proxy = settings.https_proxy or settings.http_proxy
     if proxy:
         try:
             import httpx
-            kwargs["http_client"] = httpx.Client(proxy=proxy)
+            try:
+                kwargs["http_client"] = httpx.Client(proxy=proxy, timeout=60.0)
+            except TypeError:
+                # 兼容部分 httpx 版本参数名差异
+                kwargs["http_client"] = httpx.Client(proxies=proxy, timeout=60.0)
         except ImportError:
             pass  # httpx 未安装时回退到环境变量方式
 
-    client = OpenAI(**kwargs)
-    resp = client.chat.completions.create(
-        model=model or "gpt-4o",
-        max_tokens=max_tokens,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    )
-    return resp.choices[0].message.content or ""
+    try:
+        client = OpenAI(**kwargs)
+        resp = client.chat.completions.create(
+            model=model or "gpt-4o",
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        )
+        return resp.choices[0].message.content or ""
+    except Exception as e:
+        hint = "请检查 API_BASE/模型名/API_KEY，及 HTTPS_PROXY/HTTP_PROXY 是否可用"
+        raise RuntimeError(f"LLM request failed: {e}. {hint}")
 
 
 def parse_email_for_eta(email_subject: str, email_body: str) -> dict:
