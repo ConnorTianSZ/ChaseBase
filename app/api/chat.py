@@ -30,8 +30,8 @@ def chat(req: ChatRequest, project_id: str = FPath(...)):
 
     try:
         raw = call_llm(SYSTEM_PROMPT, user_content, max_tokens=1200)
-    except RuntimeError as e:
-        return {"answer": f"LLM 配置错误：{e}", "tool_called": None, "tool_result": None}
+    except Exception as e:
+        return {"answer": f"LLM 调用失败：{e}", "tool_called": None, "tool_result": None}
 
     try:
         parsed = json.loads(raw.strip())
@@ -43,7 +43,7 @@ def chat(req: ChatRequest, project_id: str = FPath(...)):
                     "Tool: " + parsed["tool"] + "\nResult: " + json.dumps(tool_result, ensure_ascii=False),
                     max_tokens=400,
                 )
-            except RuntimeError:
+            except Exception:
                 summary = json.dumps(tool_result, ensure_ascii=False)[:500]
             return {
                 "answer": summary,
